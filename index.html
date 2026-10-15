@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Portal — Secured by Keycloak</title>
+<script src="https://cdn.jsdelivr.net/npm/keycloak-js@24.0.4/dist/keycloak.min.js"></script>
+<style>
+  :root{--bg:#f4f6fb;--card:#fff;--tx:#14202f;--mu:#5a6a7e;--bd:#dce2ec;--ac:#3f6df6;--ac2:#00a99d;--ok:#198754;--er:#d33f49}
+  @media(prefers-color-scheme:dark){:root{--bg:#0d131f;--card:#162033;--tx:#e8eef9;--mu:#8fa1ba;--bd:#26344d;--ac:#6c94ff;--ac2:#2dd4c4}}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:36px;max-width:560px;width:100%}
+  h1{margin:0 0 6px;font-size:26px}
+  p.sub{color:var(--mu);margin:0 0 24px}
+  .btn{display:inline-block;background:var(--ac);color:#fff;border:0;padding:12px 22px;border-radius:10px;font-size:15px;cursor:pointer;text-decoration:none}
+  .btn.out{background:transparent;border:1px solid var(--bd);color:var(--tx)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+  table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
+  td,th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--bd)}
+  th{color:var(--mu);width:150px}
+  .pill{display:inline-block;background:var(--bg);border:1px solid var(--bd);padding:2px 10px;border-radius:99px;font-size:12px;margin:2px}
+  .status{padding:3px 10px;border-radius:99px;font-size:12px;display:inline-block}
+  .status.ok{background:rgba(25,135,84,.15);color:var(--ok)}
+  .status.er{background:rgba(211,63,73,.15);color:var(--er)}
+  pre{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:12px;font-size:11px;overflow-x:auto;max-height:160px}
+  #loading{color:var(--mu)}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🎓 Student Portal</h1>
+  <p class="sub">Login secured by your real Keycloak server — realm <code>college-demo</code></p>
+
+  <div id="loading">Connecting to Keycloak at localhost:8080…</div>
+
+  <div id="loggedOut" style="display:none">
+    <p>You are not logged in.</p>
+    <div class="status er" id="errBox" style="display:none"></div>
+    <div class="row">
+      <button class="btn" onclick="kc.login()">Login</button>
+    </div>
+  </div>
+
+  <div id="loggedIn" style="display:none">
+    <span class="status ok">✔ Authenticated via Keycloak</span>
+    <table>
+      <tr><th>Username</th><td id="uName"></td></tr>
+      <tr><th>Email</th><td id="uEmail"></td></tr>
+      <tr><th>Roles</th><td id="uRoles"></td></tr>
+      <tr><th>Token expires in</th><td id="uExp"></td></tr>
+    </table>
+    <div class="row">
+      <button class="btn out" onclick="toggleToken()">Show / hide access token</button>
+      <button class="btn out" onclick="kc.logout()">Logout</button>
+    </div>
+    <pre id="tokenBox" style="display:none"></pre>
+  </div>
+</div>
+
+<script>
+const kc = new Keycloak({
+  url: 'http://localhost:8080',
+  realm: 'college-demo',
+  clientId: 'student-portal'
+});
+
+kc.init({ pkceMethod: 'S256', checkLoginIframe: false }).then(auth => {
+  document.getElementById('loading').style.display = 'none';
+  if (auth) {
+    showLoggedIn();
+  } else {
+    document.getElementById('loggedOut').style.display = 'block';
+  }
+}).catch(err => {
+  document.getElementById('loading').innerHTML =
+    '<span style="color:var(--er)">Could not reach Keycloak at localhost:8080. ' +
+    'Make sure the Keycloak container is running and the realm/client exist.</span>';
+  console.error(err);
+});
+
+function showLoggedIn(){
+  document.getElementById('loggedOut').style.display = 'none';
+  document.getElementById('loggedIn').style.display = 'block';
+  const p = kc.tokenParsed;
+  document.getElementById('uName').textContent = p.preferred_username || '-';
+  document.getElementById('uEmail').textContent = p.email || '-';
+  document.getElementById('uRoles').innerHTML =
+    (p.realm_access?.roles || []).map(r => `<span class="pill">${r}</span>`).join('') || '-';
+  updateExpiry();
+  setInterval(updateExpiry, 1000);
+}
+
+function updateExpiry(){
+  const secs = Math.max(0, Math.round(kc.tokenParsed.exp - Date.now()/1000));
+  document.getElementById('uExp').textContent = secs + 's';
+  if (secs <= 0) kc.updateToken(30).catch(() => kc.login());
+}
+
+function toggleToken(){
+  const box = document.getElementById('tokenBox');
+  if (box.style.display === 'none'){
+    box.textContent = JSON.stringify(kc.tokenParsed, null, 2);
+    box.style.display = 'block';
+  } else {
+    box.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>
